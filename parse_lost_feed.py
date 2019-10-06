@@ -1,5 +1,6 @@
 from typing import List
 
+import json
 import socketserver
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -9,6 +10,12 @@ URL = 'http://advisory.mtanyct.info/LPUWebServices/CurrentLostProperty.aspx'
 CATEGORY_ATTRIB = 'Category'
 SUBCATEGORY_ATTRIB = 'SubCategory'
 COUNT_ATTRIB = 'count'
+
+CATEGORY_SWAPS = {
+    "Cell Phone/Telephone/Communication Device": "Communication Device",
+    "Entertainment (Music/Movies/Games)": "Entertainment",
+    "Carry Bag / Luggage": "Luggage",
+}
 
 
 class CORSRequestHandler(SimpleHTTPRequestHandler):
@@ -46,6 +53,27 @@ def convert_xml_to_csv(xml_text: str) -> None:
     freqs.close()
 
 
+def convert_xml_to_json(xml_text: str) -> None:
+    root = ET.fromstring(xml_text)
+
+    content = {'name': 'flare', 'children': []}
+    for child in root:
+        if child.tag != CATEGORY_ATTRIB:
+            continue
+
+        category = child.attrib[CATEGORY_ATTRIB]
+        category_name = CATEGORY_SWAPS.get(category, category).strip()
+        category_node = {'name': category_name, 'children': []}
+        for sub in child:
+            sub_name = sub.attrib[SUBCATEGORY_ATTRIB]
+            count = int(sub.attrib[COUNT_ATTRIB])
+            category_node['children'].append({'name': sub_name, 'value': count})
+        content['children'].append(category_node)
+
+    with open('flare.json', 'w') as f:
+        json.dump(content, f)
+
+
 def serve_files():
     PORT = 8000
     handler = CORSRequestHandler
@@ -61,4 +89,5 @@ def serve_files():
 if __name__ == '__main__':
     txt = fetch_xml_text()
     convert_xml_to_csv(txt)
-    serve_files()
+    convert_xml_to_json(txt)
+    # serve_files()
